@@ -1,6 +1,6 @@
 let movimientos = JSON.parse(localStorage.getItem("movimientos")) || [];
 let idEditando = null;
-
+let grafico;
 
 form.addEventListener("submit", e => {
   e.preventDefault();
@@ -112,8 +112,28 @@ function editarMonto(id) {
     />
   `;
 }
+function guardarMonto(id) {
+  const input = document.getElementById(`input-${id}`);
+  const nuevoMonto = Number(input.value);
+
+  if (isNaN(nuevoMonto) || nuevoMonto <= 0) return;
+
+  const index = movimientos.findIndex(m => m.id === id);
+  movimientos[index].monto = nuevoMonto;
+
+  localStorage.setItem("movimientos", JSON.stringify(movimientos));
+
+  mostrarHistorial();
+  actualizarGrafico(); // ✅ AHORA FUNCIONA
+}
+
 
 function actualizarGrafico() {
+  grafico.data.datasets[0].data = calcularTotales();
+  grafico.update();
+}
+
+function calcularTotales() {
   const ingresos = movimientos
     .filter(m => m.tipo === "ingreso")
     .reduce((acc, m) => acc + m.monto, 0);
@@ -122,19 +142,31 @@ function actualizarGrafico() {
     .filter(m => m.tipo === "costo")
     .reduce((acc, m) => acc + m.monto, 0);
 
-  new Chart(document.getElementById("grafico"), {
+  return [ingresos, costos];
+}
+
+
+function inicializarGrafico() {
+  const ctx = document.getElementById("grafico");
+
+  grafico = new Chart(ctx, {
     type: "pie",
     data: {
       labels: ["Ingresos", "Costos"],
       datasets: [{
-        data: [ingresos, costos]
+        data: calcularTotales()
       }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false
     }
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   mostrarHistorial();
-  actualizarGrafico();
+  inicializarGrafico();
 });
+
 
