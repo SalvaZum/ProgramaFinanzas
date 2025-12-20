@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Control de Ingresos</h1>
+
+    <div id="user-info" class="user-info" hidden>
+        <img id="user-photo" />
+        <span id="user-name"></span>
+        <button id="logoutBtn">Cerrar sesión</button>
+    </div>
+
+    <form id="form">
+    <select id="tipo">
+        <option value="ingreso">Ingreso</option>
+        <option value="costo">Costo</option>
+        <option value="ahorro">Ahorro</option>
+    </select>
+
+    <input type="text" id="descripcion" placeholder="Descripción" required>
+    <input type="number" id="monto" placeholder="Monto" required>
+    <button>Agregar</button>
+    </form>
+
+    <!-- Historial -->
+    <div class="historial-container">
+        <div>
+            <h2>Ingresos</h2>
+            <ul id="lista-ingresos"></ul>
+        </div>
+
+        <div>
+            <h2>Costos</h2>
+            <ul id="lista-costos"></ul>
+        </div>
+
+        <div>
+            <h2>Ahorros</h2>
+            <ul id="lista-ahorros"></ul>
+        </div>
+    </div>
+
+
+    <div class="grafico-container">
+        <canvas id="grafico"></canvas>
+    </div>
+
+    <script type="module" src="./scripts/app.js"></script>
+</body>
+</html>

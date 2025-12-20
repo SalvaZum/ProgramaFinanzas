@@ -74,10 +74,36 @@ form button:hover {
 }
 
 /* HISTORIAL */
-#lista {
+#item {
   list-style: none;
   width: 100%;
   max-width: 700px;
+}
+
+.historial-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+  max-width: 900px;
+}
+
+/* USUARIOS */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.user-info img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.user-info span {
+  font-weight: bold;
 }
 
 /* ITEM */
@@ -135,5 +161,10 @@ form button:hover {
 
   h2 {
     align-self: center;
+  }
+
+  .historial-container{
+    display: flex;
+    flex-direction: column;
   }
 }

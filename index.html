@@ -1,33 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestor</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Ingresar</title>
 </head>
 <body>
-    <h1>Control de Ingresos</h1>
 
-    <form id="form">
-    <select id="tipo">
-        <option value="ingreso">Ingreso</option>
-        <option value="costo">Costo</option>
-    </select>
+  <h1>Gestor de Ingresos</h1>
+  <button id="loginBtn">Iniciar sesión con Google</button>
 
-    <input type="text" id="descripcion" placeholder="Descripción" required>
-    <input type="number" id="monto" placeholder="Monto" required>
-    <button>Agregar</button>
-    </form>
-
-    <h2>Historial</h2>
-    <ul id="lista"></ul>
-
-    <div class="grafico-container">
-        <canvas id="grafico"></canvas>
-    </div>
-
-    <script src="app.js"></script>
+  <script type="module" src="scripts/auth.js"></script>
 </body>
 </html>
