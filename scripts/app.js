@@ -1,15 +1,7 @@
 import { auth, db } from "./firebase.js";
-import {
-  onAuthStateChanged,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import {
-  collection,
-  doc,
-  setDoc,
-  getDocs,
-  deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { collection, doc, setDoc, getDocs, deleteDoc} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 /* =====================
    VARIABLES
@@ -30,14 +22,29 @@ const listaIngresos = document.getElementById("lista-ingresos");
 const listaCostos = document.getElementById("lista-costos");
 const listaAhorros = document.getElementById("lista-ahorros");
 
-const logoutBtn = document.getElementById("logoutBtn");
+const logoutBtn = document.getElementById("confirmLogout");
+
+const categoriaSelect = document.getElementById("categoria");
+const nuevaCategoriaInput = document.getElementById("nueva-categoria");
+const agregarCategoriaBtn = document.getElementById("agregar-categoria");
+
+const filtroMesInput = document.getElementById("filtro-mes");
+let mesSeleccionado = null;
+
+const objetivoInput = document.getElementById("objetivo-input");
+const guardarObjetivoBtn = document.getElementById("guardar-objetivo");
+const barraProgreso = document.getElementById("barra-progreso");
+const textoProgreso = document.getElementById("texto-progreso");
+const periodoSelect = document.getElementById("periodo-objetivo");
+
+let objetivo = null;
 
 /* =====================
    AUTH + PROTECCIÓN
 ===================== */
 onAuthStateChanged(auth, async user => {
   if (!user) {
-    window.location.href = "index.html"; // 🔒 protección
+    window.location.href = "index.html"; 
     return;
   }
 
@@ -48,9 +55,17 @@ onAuthStateChanged(auth, async user => {
   document.getElementById("user-name").textContent = user.displayName;
   document.getElementById("user-photo").src = user.photoURL;
 
+  const hoy = new Date().toISOString().slice(0, 7);
+  filtroMesInput.value = hoy;
+  mesSeleccionado = hoy;
+
   await cargarMovimientos();
+  cargarObjetivo();
+  actualizarObjetivo()
   mostrarHistorial();
   inicializarGrafico();
+  actualizarResumen();
+  cargarCategorias();
 });
 
 logoutBtn.onclick = () => {signOut(auth)};
@@ -66,7 +81,8 @@ form.addEventListener("submit", async e => {
     tipo: tipo.value,
     descripcion: descripcion.value,
     monto: Number(monto.value),
-    fecha: new Date().toLocaleDateString()
+    categoria: categoriaSelect.value,
+    fecha: new Date().toISOString()
   };
 
   movimientos.push(movimiento);
@@ -74,8 +90,49 @@ form.addEventListener("submit", async e => {
 
   mostrarHistorial();
   actualizarGrafico();
+  actualizarResumen();
+  actualizarObjetivo();
   form.reset();
 });
+
+/* =====================
+  CATEGORIAs
+===================== */
+async function guardarCategoria(nombre) {
+  const ref = doc(
+    collection(db, "users", usuarioActual.uid, "categorias")
+  );
+
+  await setDoc(ref, {
+    nombre
+  });
+}
+
+agregarCategoriaBtn.addEventListener("click", async () => {
+  const nombre = nuevaCategoriaInput.value.trim();
+  if (!nombre || !usuarioActual) return;
+
+  await guardarCategoria(nombre);
+  nuevaCategoriaInput.value = "";
+  cargarCategorias();
+});
+
+async function cargarCategorias() {
+  categoriaSelect.innerHTML = `
+    <option value="">Seleccionar categoría</option>
+  `;
+
+  const snap = await getDocs(
+    collection(db, "users", usuarioActual.uid, "categorias")
+  );
+
+  snap.forEach(doc => {
+    const opt = document.createElement("option");
+    opt.value = doc.data().nombre;
+    opt.textContent = doc.data().nombre;
+    categoriaSelect.appendChild(opt);
+  });
+}
 
 /* =====================
    FIRESTORE
@@ -88,7 +145,7 @@ async function guardarMovimiento(movimiento) {
 }
 
 window.eliminarMovimiento = async id => {
-  movimientos = movimientos.filter(m => m.id !== id);
+  movimientos = obtenerMovimientosFiltrados().filter(m => m.id !== id);
 
   await deleteDoc(
     doc(db, "users", usuarioActual.uid, "movimientos", id.toString())
@@ -96,6 +153,8 @@ window.eliminarMovimiento = async id => {
 
   mostrarHistorial();
   actualizarGrafico();
+  actualizarResumen();
+  actualizarObjetivo();
 };
 
 async function cargarMovimientos() {
@@ -114,13 +173,14 @@ function mostrarHistorial() {
   listaCostos.innerHTML = "";
   listaAhorros.innerHTML = "";
 
-  movimientos.forEach(m => {
+  obtenerMovimientosFiltrados().forEach(m => {
     const li = document.createElement("li");
     li.className = "item";
 
     li.innerHTML = `
       <span>
-        ${m.fecha} | ${m.descripcion} |
+        ${formatearFecha(m.fecha)} ${m.descripcion}
+        <em>${m.categoria}</em>
         <strong>$<span id="monto-${m.id}">${m.monto}</span></strong>
       </span>
       <div class="acciones">
@@ -134,6 +194,158 @@ function mostrarHistorial() {
     if (m.tipo === "ahorro") listaAhorros.appendChild(li);
   });
 }
+
+function formatearFecha(fechaISO) {
+  const fecha = new Date(fechaISO);
+  return fecha.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
+/* =====================
+   ACUTALIZAR BALANCE Y OBJETIVO AHORRO
+===================== */
+function actualizarResumen() {
+  const ingresos = movimientos
+    .filter(m => m.tipo === "ingreso")
+    .reduce((a, m) => a + m.monto, 0);
+
+  const costos = movimientos
+    .filter(m => m.tipo === "costo")
+    .reduce((a, m) => a + m.monto, 0);
+
+  const ahorros = movimientos
+    .filter(m => m.tipo === "ahorro")
+    .reduce((a, m) => a + m.monto, 0);
+
+  const balance = ingresos - costos - ahorros;
+
+  document.getElementById("total-ingresos").textContent = `$${ingresos}`;
+  document.getElementById("total-costos").textContent = `$${costos}`;
+  document.getElementById("total-ahorros").textContent = `$${ahorros}`;
+  document.getElementById("balance-total").textContent = `$${balance}`;
+
+  const balanceCard = document.querySelector(".balance");
+  balanceCard.classList.remove("positivo", "negativo");
+  balanceCard.classList.add(balance >= 0 ? "positivo" : "negativo");
+}
+
+function actualizarObjetivo() {
+  if (!objetivo) {
+    barraProgreso.style.width = "0%";
+    textoProgreso.textContent = "Definí un objetivo de ahorro";
+    return;
+  }
+
+  const ahorrado = calcularAhorroObjetivo();
+  const porcentaje = Math.min(
+    Math.round((ahorrado / objetivo.monto) * 100),
+    100
+  );
+
+  barraProgreso.style.width = `${porcentaje}%`;
+
+  const diasRestantes = Math.ceil(
+    (objetivo.fin - new Date()) / (1000 * 60 * 60 * 24)
+  );
+
+  textoProgreso.textContent =
+    `$${ahorrado} / $${objetivo.monto} (${porcentaje}%) — ${diasRestantes} días restantes`;
+}
+
+
+function calcularFechasObjetivo(periodo) {
+  const inicio = new Date();
+  const fin = new Date(inicio);
+
+  if (periodo === "mensual") fin.setMonth(fin.getMonth() + 1);
+  if (periodo === "trimestral") fin.setMonth(fin.getMonth() + 3);
+  if (periodo === "anual") fin.setFullYear(fin.getFullYear() + 1);
+
+  return { inicio, fin };
+}
+
+async function cargarObjetivo() {
+  const ref = doc(db, "users", usuarioActual.uid, "objetivo", "actual");
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const ahora = new Date();
+  const fin = new Date(data.fin);
+
+  // 🔁 SI VENCIO → RESET
+  if (ahora > fin) {
+    await deleteDoc(ref);
+    objetivo = null;
+    actualizarObjetivo();
+    return;
+  }
+
+  objetivo = {
+    monto: data.monto,
+    periodo: data.periodo,
+    inicio: new Date(data.inicio),
+    fin: fin
+  };
+
+  objetivoInput.value = objetivo.monto;
+  periodoSelect.value = objetivo.periodo;
+
+  actualizarObjetivo();
+}
+
+async function guardarObjetivo() {
+  const monto = Number(objetivoInput.value);
+  const periodo = periodoSelect.value;
+
+  if (isNaN(monto) || monto <= 0) return;
+
+  let inicio, fin;
+
+  if (objetivo) {
+    // 🔹 YA EXISTE → NO reiniciar progreso
+    inicio = objetivo.inicio;
+    fin = objetivo.fin;
+  } else {
+    // 🔹 NUEVO objetivo
+    const fechas = calcularFechasObjetivo(periodo);
+    inicio = fechas.inicio;
+    fin = fechas.fin;
+  }
+
+  objetivo = { monto, periodo, inicio, fin };
+
+  await setDoc(
+    doc(db, "users", usuarioActual.uid, "objetivo", "actual"),
+    {
+      monto,
+      periodo,
+      inicio: inicio.toISOString(),
+      fin: fin.toISOString()
+    }
+  );
+
+  actualizarObjetivo();
+}
+
+guardarObjetivoBtn.addEventListener("click", guardarObjetivo);
+
+function calcularAhorroObjetivo() {
+  if (!objetivo) return 0;
+
+  return obtenerMovimientosFiltrados()
+    .filter(m =>
+      m.tipo === "ahorro" &&
+      new Date(m.fecha) >= objetivo.inicio &&
+      new Date(m.fecha) <= objetivo.fin
+    )
+    .reduce((a, m) => a + m.monto, 0);
+}
+
 
 /* =====================
    EDITAR MONTO
@@ -164,6 +376,8 @@ window.guardarMonto = async id => {
   await guardarMovimiento(movimientos[index]);
   mostrarHistorial();
   actualizarGrafico();
+  actualizarObjetivo();
+  actualizarResumen();
 };
 
 /* =====================
@@ -171,7 +385,7 @@ window.guardarMonto = async id => {
 ===================== */
 function calcularTotales() {
   const sum = tipo =>
-    movimientos
+    obtenerMovimientosFiltrados()
       .filter(m => m.tipo === tipo)
       .reduce((a, m) => a + m.monto, 0);
 
@@ -202,3 +416,28 @@ function actualizarGrafico() {
   grafico.data.datasets[0].data = calcularTotales();
   grafico.update();
 }
+
+/* =====================
+  FILTRO
+===================== */
+function obtenerMovimientosFiltrados() {
+  if (!mesSeleccionado) return movimientos;
+
+  return movimientos.filter(m => {
+    if (!m.fecha) return false;
+
+    const fecha = new Date(m.fecha);
+    const mesMovimiento = fecha.toISOString().slice(0, 7); // YYYY-MM
+
+    return mesMovimiento === mesSeleccionado;
+  });
+}
+
+filtroMesInput.addEventListener("change", e => {
+  mesSeleccionado = e.target.value;
+
+  mostrarHistorial();
+  actualizarResumen();
+  actualizarGrafico();
+  actualizarObjetivo();
+});
