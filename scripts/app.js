@@ -37,6 +37,8 @@ const barraProgreso = document.getElementById("barra-progreso");
 const textoProgreso = document.getElementById("texto-progreso");
 const periodoSelect = document.getElementById("periodo-objetivo");
 
+const listaCategorias = document.getElementById("mostrar-categorias")
+
 let objetivo = null;
 
 /* =====================
@@ -122,17 +124,44 @@ async function cargarCategorias() {
     <option value="">Seleccionar categoría</option>
   `;
 
+  listaCategorias.innerHTML = "";
+
   const snap = await getDocs(
     collection(db, "users", usuarioActual.uid, "categorias")
   );
 
-  snap.forEach(doc => {
+  snap.forEach(docu => {
+    const data = docu.data();
+    const id = docu.id;
+
+    // ---- SELECT ----
     const opt = document.createElement("option");
-    opt.value = doc.data().nombre;
-    opt.textContent = doc.data().nombre;
+    opt.value = data.nombre;
+    opt.textContent = data.nombre;
     categoriaSelect.appendChild(opt);
+
+    // ---- LISTA VISUAL ----
+    const li = document.createElement("li");
+    li.className = "list-group-item d-flex justify-content-between align-items-center m-3 border p-2";
+
+    li.innerHTML = `
+      ${data.nombre}
+      <button class="btn btn-danger btn-sm" onclick="eliminarCategoria('${id}')">
+        Eliminar
+      </button>
+    `;
+
+    listaCategorias.appendChild(li);
   });
 }
+
+window.eliminarCategoria = async (id) => {
+  await deleteDoc(
+    doc(db, "users", usuarioActual.uid, "categorias", id)
+  );
+
+  cargarCategorias();
+};
 
 /* =====================
    FIRESTORE
@@ -184,8 +213,8 @@ function mostrarHistorial() {
         <strong>$<span id="monto-${m.id}">${m.monto}</span></strong>
       </span>
       <div class="acciones">
-        <button onclick="editarMonto(${m.id})">✏️</button>
-        <button onclick="eliminarMovimiento(${m.id})">🗑️</button>
+        <button onclick="editarMonto(${m.id})" class="border-0 bg-white">✏️</button>
+        <button onclick="eliminarMovimiento(${m.id})" class="border-0 bg-white">🗑️</button>
       </div>
     `;
 
@@ -208,15 +237,17 @@ function formatearFecha(fechaISO) {
    ACUTALIZAR BALANCE Y OBJETIVO AHORRO
 ===================== */
 function actualizarResumen() {
-  const ingresos = movimientos
+  const filtrados = obtenerMovimientosFiltrados();
+
+  const ingresos = filtrados
     .filter(m => m.tipo === "ingreso")
     .reduce((a, m) => a + m.monto, 0);
 
-  const costos = movimientos
+  const costos = filtrados
     .filter(m => m.tipo === "costo")
     .reduce((a, m) => a + m.monto, 0);
 
-  const ahorros = movimientos
+  const ahorros = filtrados
     .filter(m => m.tipo === "ahorro")
     .reduce((a, m) => a + m.monto, 0);
 

@@ -15,6 +15,10 @@ body {
   margin: 0;
 }
 
+li{
+  list-style-type: none;
+}
+
 .ingreso p { color: #22c55e; }
 .costo p { color: #ef4444; }
 .ahorro p { color: #3b82f6; }
